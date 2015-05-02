@@ -7,8 +7,6 @@ from argparse import ArgumentParser
 
 logger = logging.getLogger('MIPSGENERATER')
 
-reRuleRightQuote = re.compile("\[")
-
 #
 # regs are dict of dict
 #
@@ -94,8 +92,8 @@ def checkLeftQuoteInCode(instCode = str('')):
 
 def checkRightQuoteInCode(instCode = str('')):
     pos = []
-    reRuleLeftQuote = re.compile("\]")
-    matches = reRuleLeftQuote.finditer(instCode)
+    reRuleRightQuote = re.compile("\]")
+    matches = reRuleRightQuote.finditer(instCode)
     for i in matches:
         pos.append(i.start())
 
