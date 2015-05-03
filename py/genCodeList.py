@@ -12,8 +12,8 @@ logger = logging.getLogger('MIPSGENERATER')
 #
 class InstFormat:
 
-    def __init__(self): 
-        print "initialize." 
+    def __init__(self):
+        logger.debug("Initialize InstFormat")
         self.__instName = ''
         self.__regs = []
         self.__maxHex = 0
@@ -70,12 +70,30 @@ class InstFormat:
             logger.debug("MaxCode is " + maxCode)
             logger.debug("MinCode is " + minCode)
 
+        self.__maxHex = maxCode
+        self.__minHex = minCode
+
     def setCode(self, instCode = ''):
         self.__instCode = instCode
 
+    def getInstName(self):
+        return self.__instName
 
-def setLogLevel():
-    logger.setLevel(logging.DEBUG)
+    def getRegs(self):
+        return self.__regs
+
+    def getMaxHex(self):
+        return self.__maxHex
+
+    def getMinHex(self):
+        return self.__minHex
+
+    def getInstCode(self):
+        return self.__instCode
+
+
+def setLogLevel(level = 0):
+    logger.setLevel(level)
     hdr = logging.StreamHandler()
     formatter = logging.Formatter('[%(asctime)s]: %(funcName)s: %(levelname)s: %(message)s')
     hdr.setFormatter(formatter)
@@ -186,6 +204,20 @@ def decodeInsts(instline = str('')):
     inst.setCode(instCode)
     inst.reorganize()
 
+    return inst
+
+def showAllInsts(insts = []):
+    for i in range(0, len(insts)):
+        inst = insts[i]
+
+        logger.info("All instructions messages:")
+        logger.info(inst.getInstName())
+        logger.info(inst.getMaxHex())
+        logger.info(inst.getMinHex())
+        logger.info(inst.getInstCode())
+        logger.info(inst.getRegs)
+        logger.info("")
+
 def openInstFile(filename=""):
     logger.debug("File name is: " + filename)
     if not os.path.isfile(filename):
@@ -195,17 +227,31 @@ def openInstFile(filename=""):
     fileContent = ifile.read();
     instlines = fileContent.split('\n')
 
+    insts = []
+
     for i in range(0, instlines.__len__()):
-        decodeInsts(instlines[i])
+        inst = decodeInsts(instlines[i]);
+
+        if inst != -1:
+            insts.append(inst)
+
+    showAllInsts(insts)
 
 if __name__ == '__main__':
-    print "Into main function"
+    logger.debug("Into main function")
+    debugLevel = 0
+
     p = ArgumentParser(usage=sys.argv[0] + ' it is usage tip',
-            description='this is a test')  
+            description='this is a test')
     p.add_argument('--file', default=" ", type=str,
-            help='the first argument')  
-    
-    setLogLevel()
-    args = p.parse_args()  
+            help='the first argument')
+    p.add_argument('-d', default=0, type=int, nargs='?', help='set debug level')
+
+    args = p.parse_args()
+
+    if args.d == None:
+        debugLevel = logging.DEBUG
+
+    setLogLevel(debugLevel)
     openInstFile(args.file)
 
