@@ -31,12 +31,14 @@ class InstFormat:
 
     def __init__(self):
         logger.debug("Initialize InstFormat")
-        self.__instName = ''
+        self.__instName = ""
         self.__regs = []
         self.__instIds = []
+        self.__maxCode = ""
+        self.__minCode = ""
+        self.__instCode = ''
         self.__maxHex = 0
         self.__minHex = 0
-        self.__instCode = ''
 
     def addReg(self, reg=dict()):
         self.__regs.append(reg)
@@ -113,8 +115,22 @@ class InstFormat:
 
         self.__instIds = newInstIds
 
-        self.__maxHex = maxCode
-        self.__minHex = minCode
+        self.__maxCode = maxCode
+        self.__minCode = minCode
+        self.__maxHex = self.binStr2Number(maxCode)
+        self.__minHex = self.binStr2Number(minCode)
+        logger.debug(str(self.__maxHex) + ":" + str(self.__minHex))
+
+    def binStr2Number(self, binStr):
+        number = 0
+        strSize = len(binStr)
+        logger.debug("Str is " + binStr)
+        logger.debug("StrSize is " + str(strSize))
+        for i in range(0, strSize):
+            if binStr[i] == '1':
+                number |= 1 << (strSize - i - 1)
+
+        return number
 
     def setCode(self, instCode = ''):
         self.__instCode = instCode
@@ -142,12 +158,49 @@ class InstGroup:
     IDWIDTH="idWidth"
     IDVALUE="idValue"
 
-    def __init__(self, groupIds):
+    def __init__(self, groupIds, idCnt):
         self.__instList = []
         self.__groupIds = groupIds
+        self.__decodeTree = dict()
+        self.__idCnt = idCnt;
+
+    def updateDecodeTree(self, decodeTree = dict(), instIds = [], depth = 0):
+        if depth >= self.__idCnt:
+            logger.debug("found in decode tree")
+            return dict()
+
+        keys = decodeTree.keys()
+        newKey = instIds[depth].get(InstFormat.IDVALUE)
+
+        if newKey in keys:
+            newValue = self.updateDecodeTree(decodeTree.get(newKey), instIds, depth + 1)
+            decodeTree.update({newKey:newValue})
+        else:
+            logger.debug("Not found in decode tree")
+            newKey = instIds[depth].get(InstFormat.IDVALUE)
+            newValue = dict()
+            decodeTree.update({newKey:newValue})
+
+            newValue = self.updateDecodeTree(decodeTree.get(newKey), instIds, depth + 1)
+            decodeTree.update({newKey:newValue})
+
+        return decodeTree
 
     def addInst(self, inst):
         self.__instList.append(inst)
+
+        if len(inst.getInstIds()) != self.__idCnt:
+            logger.error("Bad instruction")
+            return
+
+        decodeTree = self.__decodeTree;
+        self.__decodeTree = self.updateDecodeTree(decodeTree, inst.getInstIds(), 0)
+
+        keys = self.__decodeTree.keys()
+
+        for instId in inst.getInstIds():
+            instId.get(InstFormat.IDVALUE)
+
 
     def getGroupIds(self):
         return self.__groupIds
@@ -174,11 +227,11 @@ class InstGenerator:
         for i in range(0, instIdSize):
 
             if not instIds[i].get(InstFormat.IDPOS) \
-                    == groupIds[i].get(InstFormat.IDPOS):
+                    == groupIds[i].get(InstGroup.IDPOS):
                 return False
 
             if not instIds[i].get(InstFormat.IDWIDTH) \
-                    == groupIds[i].get(InstFormat.IDWIDTH):
+                    == groupIds[i].get(InstGroup.IDWIDTH):
                 return False
 
         return True
@@ -208,9 +261,15 @@ class InstGenerator:
             gId.update({InstGroup.IDPOS:instId.get(InstFormat.IDPOS)})
             gId.update({InstGroup.IDWIDTH:instId.get(InstFormat.IDWIDTH)})
             gIds.append(gId)
-        newGroup = InstGroup(gIds)
+        newGroup = InstGroup(gIds, len(gIds))
         self.__groups.append(newGroup)
         return newGroup
+
+    def analysisGroup(self):
+        groups = self.getGroups()
+
+    def getGroups(self):
+        return self.__groups
 
 
 def setLogLevel(level = 0):
@@ -333,8 +392,8 @@ def showAllInsts(insts = []):
 
         logger.info("All instructions messages:")
         logger.info(inst.getInstName())
-        logger.info(inst.getMaxHex())
-        logger.info(inst.getMinHex())
+        logger.info(hex(inst.getMaxHex()))
+        logger.info(hex(inst.getMinHex()))
         logger.info(inst.getInstCode())
         regs = inst.getRegs()
         for j in range(0, len(regs)):
@@ -374,6 +433,7 @@ def do_main(filename):
 
     showAllInsts(insts)
     generator = InstGenerator(insts)
+    generator.analysisGroup()
 
 
 if __name__ == '__main__':
