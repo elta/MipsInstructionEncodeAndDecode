@@ -11,11 +11,29 @@ logger = logging.getLogger('MIPSGENERATER')
 # regs are dict of dict
 #
 class InstFormat:
+    """
+    Keyword arguments:
+    __instName - Instruction Name
+    __regs - Registers name and position
+        regs format:
+           regname
+    __maxHex = 0
+    __minHex = 0
+    __instCode = ''
+    """
+
+    REGNAME="regName"
+    REGPOS="regPos"
+    REGWIDTH="regWidth"
+    IDPOS="idPos"
+    IDWIDTH="idWidth"
+    IDVALUE="idValue"
 
     def __init__(self):
         logger.debug("Initialize InstFormat")
         self.__instName = ''
         self.__regs = []
+        self.__instId = []
         self.__maxHex = 0
         self.__minHex = 0
         self.__instCode = ''
@@ -30,9 +48,12 @@ class InstFormat:
         return self.__regs
 
     def reorganize(self):
+        """
+        Sort regs by position and generate common codes.
+        """
         sortList = {}
         for i in range (0, len(self.__regs)):
-            sortList.update({self.__regs[i].get('pos'):i})
+            sortList.update({self.__regs[i].get(InstFormat.REGPOS):i})
 
         newRegs = []
         totaloffset = 0;
@@ -40,12 +61,12 @@ class InstFormat:
         for i in sorted(sortList.keys()):
             reg = self.__regs[sortList[i]]
 
-            pos = reg.get('pos');
-            regname = reg.get('regname')
+            pos = reg.get(InstFormat.REGPOS);
+            regname = reg.get(InstFormat.REGNAME)
 
             pos = pos - totaloffset;
 
-            reg.update({'pos':pos})
+            reg.update({InstFormat.REGPOS:pos})
 
             totaloffset += len(regname) - 1
             instCode = instCode.replace(regname, 'x')
@@ -61,14 +82,39 @@ class InstFormat:
 
         logger.debug("MaxCode is " + maxCode)
         logger.debug("MinCode is " + minCode)
+        newInstIds = []
+        id_pos = 0
+
         for i in range(0, len(self.__regs)):
             reg = self.__regs[i]
-            pos = reg.get('pos')
-            width = reg.get('width')
+            pos = reg.get(InstFormat.REGPOS)
+            width = reg.get(InstFormat.REGWIDTH)
+
             maxCode = maxCode[:pos] + '1' * width + maxCode[pos + width:]
             minCode = minCode[:pos] + '0' * width + minCode[pos + width:]
+
+            if (pos - id_pos) > 0:
+                instId = dict()
+                instId.update({InstFormat.IDPOS:id_pos})
+                instId.update({InstFormat.IDWIDTH:(pos - id_pos)})
+                instId.update({InstFormat.IDVALUE:instCode[id_pos:pos]})
+                newInstIds.append(instId)
+                logger.debug("InstID = " + str(id_pos) + ":" + str(pos - id_pos) + ":" + instCode[id_pos:pos])
+
+            id_pos = pos + width
+
             logger.debug("MaxCode is " + maxCode)
             logger.debug("MinCode is " + minCode)
+
+        if (id_pos < len(instCode)):
+            instId = dict()
+            instId.update({InstFormat.IDPOS:id_pos})
+            instId.update({InstFormat.IDWIDTH:(len(instCode) - id_pos)})
+            instId.update({InstFormat.IDVALUE:instCode[id_pos:len(instCode)]})
+            newInstIds.append(instId)
+            logger.debug("InstID = " + str(id_pos) + ":" + str(len(instCode) - id_pos) + ":" + instCode[id_pos:len(instCode)])
+
+        self.__instId = newInstIds
 
         self.__maxHex = maxCode
         self.__minHex = minCode
@@ -194,9 +240,9 @@ def decodeInsts(instline = str('')):
         match = re.search(' *' + search, instCode)
         width = match.end() - match.start() - len(pure_search) + 1
 
-        reg.update({'regname':regname})
-        reg.update({'width':width})
-        reg.update({'pos':match.start()})
+        reg.update({InstFormat.REGNAME:regname})
+        reg.update({InstFormat.REGWIDTH:width})
+        reg.update({InstFormat.REGPOS:match.start()})
 
         logger.debug("add reg" + str(reg))
         inst.addReg(reg)
@@ -215,7 +261,17 @@ def showAllInsts(insts = []):
         logger.info(inst.getMaxHex())
         logger.info(inst.getMinHex())
         logger.info(inst.getInstCode())
-        logger.info(inst.getRegs)
+        regs = inst.getRegs()
+        for j in range(0, len(regs)):
+            reg = regs[j]
+            regname = reg.get(InstFormat.REGNAME)
+            regpos = reg.get(InstFormat.REGPOS)
+            regwidth = reg.get(InstFormat.REGWIDTH)
+            logger.info("regname: " + regname)
+            logger.info("regpos: " + str(regpos))
+            logger.info("regwidth: " + str(regwidth))
+            logger.info("----------")
+
         logger.info("")
 
 def openInstFile(filename=""):
@@ -225,6 +281,12 @@ def openInstFile(filename=""):
         return -1;
     ifile = open(filename, 'r')
     fileContent = ifile.read();
+
+    return fileContent
+
+def do_main(filename):
+    fileContent = openInstFile(filename)
+
     instlines = fileContent.split('\n')
 
     insts = []
@@ -236,6 +298,7 @@ def openInstFile(filename=""):
             insts.append(inst)
 
     showAllInsts(insts)
+
 
 if __name__ == '__main__':
     logger.debug("Into main function")
@@ -253,5 +316,6 @@ if __name__ == '__main__':
         debugLevel = logging.DEBUG
 
     setLogLevel(debugLevel)
-    openInstFile(args.file)
+
+    do_main(args.file)
 
