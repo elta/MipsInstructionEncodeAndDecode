@@ -3,3 +3,5 @@ blezl rs, offset;000110    rs00000               offset
 blezl rs, offset;000110    rs00000               offset
 dext rt, rs, pos, size;011111    rs    rt    [size - 1]    pos000011
 ld rt, offset(base);110111    base    rt               offset
+blezl rs, offset;000110    rs00000               offset
+dext rt, rs, pos, size;011111    rs    rt    [size - 1]    pos000011

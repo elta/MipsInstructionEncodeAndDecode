@@ -33,7 +33,7 @@ class InstFormat:
         logger.debug("Initialize InstFormat")
         self.__instName = ''
         self.__regs = []
-        self.__instId = []
+        self.__instIds = []
         self.__maxHex = 0
         self.__minHex = 0
         self.__instCode = ''
@@ -43,9 +43,6 @@ class InstFormat:
 
     def addInstName(self, name = ""):
         self.__instName = name
-
-    def getRegs(self):
-        return self.__regs
 
     def reorganize(self):
         """
@@ -114,7 +111,7 @@ class InstFormat:
             newInstIds.append(instId)
             logger.debug("InstID = " + str(id_pos) + ":" + str(len(instCode) - id_pos) + ":" + instCode[id_pos:len(instCode)])
 
-        self.__instId = newInstIds
+        self.__instIds = newInstIds
 
         self.__maxHex = maxCode
         self.__minHex = minCode
@@ -128,6 +125,9 @@ class InstFormat:
     def getRegs(self):
         return self.__regs
 
+    def getInstIds(self):
+        return self.__instIds
+
     def getMaxHex(self):
         return self.__maxHex
 
@@ -136,6 +136,81 @@ class InstFormat:
 
     def getInstCode(self):
         return self.__instCode
+
+class InstGroup:
+    IDPOS="idPos"
+    IDWIDTH="idWidth"
+    IDVALUE="idValue"
+
+    def __init__(self, groupIds):
+        self.__instList = []
+        self.__groupIds = groupIds
+
+    def addInst(self, inst):
+        self.__instList.append(inst)
+
+    def getGroupIds(self):
+        return self.__groupIds
+
+class InstGenerator:
+    """
+    Make group for insts, and generate js codes
+    """
+
+    def __init__(self, insts):
+        self.__insts = insts
+        self.__groups = []
+
+        self.autoFormatGroup()
+
+    def checkInstInFormatGroup(self, inst, group):
+        instIds = inst.getInstIds();
+        groupIds = group.getGroupIds();
+
+        instIdSize = len(instIds)
+        if instIdSize != len(groupIds):
+            return False
+
+        for i in range(0, instIdSize):
+
+            if not instIds[i].get(InstFormat.IDPOS) \
+                    == groupIds[i].get(InstFormat.IDPOS):
+                return False
+
+            if not instIds[i].get(InstFormat.IDWIDTH) \
+                    == groupIds[i].get(InstFormat.IDWIDTH):
+                return False
+
+        return True
+
+    def autoFormatGroup(self):
+        for inst in self.__insts:
+            inGroup = False
+            for group in self.__groups:
+                inGroup = self.checkInstInFormatGroup(inst, group)
+                if inGroup:
+                    group.addInst(inst)
+                    break
+
+            logger.debug("InstName is " + inst.getInstName())
+
+            if not inGroup:
+                group = self.addNewGroup(inst)
+                group.addInst(inst)
+                logger.debug("Add new group")
+            else:
+                logger.debug("Found in group")
+
+    def addNewGroup(self, inst):
+        gIds = []
+        for instId in inst.getInstIds():
+            gId = dict()
+            gId.update({InstGroup.IDPOS:instId.get(InstFormat.IDPOS)})
+            gId.update({InstGroup.IDWIDTH:instId.get(InstFormat.IDWIDTH)})
+            gIds.append(gId)
+        newGroup = InstGroup(gIds)
+        self.__groups.append(newGroup)
+        return newGroup
 
 
 def setLogLevel(level = 0):
@@ -298,6 +373,7 @@ def do_main(filename):
             insts.append(inst)
 
     showAllInsts(insts)
+    generator = InstGenerator(insts)
 
 
 if __name__ == '__main__':
