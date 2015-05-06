@@ -179,7 +179,7 @@ def decodeInsts(instline = str('')):
 
         reg = {}
 
-        search = instLasts[i]
+        pure_search = search = instLasts[i]
         regname = search
 
         if hasQuote == 1:
@@ -192,7 +192,7 @@ def decodeInsts(instline = str('')):
 
         logger.debug("search is " + search);
         match = re.search(' *' + search, instCode)
-        width = match.end() - match.start() - len(search) + 1
+        width = match.end() - match.start() - len(pure_search) + 1
 
         reg.update({'regname':regname})
         reg.update({'width':width})
