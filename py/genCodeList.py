@@ -14,7 +14,7 @@ class InstFormat:
     """
     Keyword arguments:
     __instName - Instruction Name
-    __regs - Registers name and position
+    __regsCode - Registers name and position
         regs format:
            regname
     __maxHex = 0
@@ -32,16 +32,17 @@ class InstFormat:
     def __init__(self):
         logger.debug("Initialize InstFormat")
         self.__instName = ""
-        self.__regs = []
+        self.__regsCode = []
         self.__instIds = []
         self.__maxCode = ""
         self.__minCode = ""
         self.__instCode = ''
         self.__maxHex = 0
         self.__minHex = 0
+        self.__hexRegs = []
 
     def addReg(self, reg=dict()):
-        self.__regs.append(reg)
+        self.__regsCode.append(reg)
 
     def addInstName(self, name = ""):
         self.__instName = name
@@ -51,14 +52,14 @@ class InstFormat:
         Sort regs by position and generate common codes.
         """
         sortList = {}
-        for i in range (0, len(self.__regs)):
-            sortList.update({self.__regs[i].get(InstFormat.REGPOS):i})
+        for i in range (0, len(self.__regsCode)):
+            sortList.update({self.__regsCode[i].get(InstFormat.REGPOS):i})
 
         newRegs = []
         totaloffset = 0;
         instCode = self.__instCode
         for i in sorted(sortList.keys()):
-            reg = self.__regs[sortList[i]]
+            reg = self.__regsCode[sortList[i]]
 
             pos = reg.get(InstFormat.REGPOS);
             regname = reg.get(InstFormat.REGNAME)
@@ -71,7 +72,7 @@ class InstFormat:
             instCode = instCode.replace(regname, 'x')
 
             newRegs.append(reg)
-        self.__regs = newRegs
+        self.__regsCode = newRegs
 
         logger.debug("Organized regs :" + str(newRegs))
 
@@ -84,8 +85,8 @@ class InstFormat:
         newInstIds = []
         id_pos = 0
 
-        for i in range(0, len(self.__regs)):
-            reg = self.__regs[i]
+        for i in range(0, len(self.__regsCode)):
+            reg = self.__regsCode[i]
             pos = reg.get(InstFormat.REGPOS)
             width = reg.get(InstFormat.REGWIDTH)
 
@@ -115,8 +116,23 @@ class InstFormat:
 
         self.__instIds = newInstIds
 
+        hexRegs = []
+        instLen = len(instCode)
+        for reg in self.__regsCode:
+            hexReg = dict()
+            regName = reg.get(InstFormat.REGNAME)
+            regPos = reg.get(InstFormat.REGPOS)
+            regWidth = reg.get(InstFormat.REGWIDTH)
+
+            hexReg.update({InstFormat.REGNAME:regName})
+            hexReg.update({InstFormat.REGPOS:instLen - regPos - regWidth})
+            hexReg.update({InstFormat.REGWIDTH:regWidth})
+            hexRegs.append(hexReg)
+        self.__hexRegs = hexRegs
+
         self.__maxCode = maxCode
         self.__minCode = minCode
+
         self.__maxHex = self.binStr2Number(maxCode)
         self.__minHex = self.binStr2Number(minCode)
         logger.debug(str(self.__maxHex) + ":" + str(self.__minHex))
@@ -138,8 +154,8 @@ class InstFormat:
     def getInstName(self):
         return self.__instName
 
-    def getRegs(self):
-        return self.__regs
+    def getRegsCode(self):
+        return self.__regsCode
 
     def getInstIds(self):
         return self.__instIds
@@ -159,51 +175,16 @@ class InstGroup:
     IDVALUE="idValue"
 
     def __init__(self, groupIds, idCnt):
+        """
+        Instruction Group
+        Basic arguments:
+        instList - instruction in this group
+        groupHexFormat - instrction format of this group
+        groupFormatDetail - Detail of group format, as postion and width
+        """
         self.__instList = []
-        self.__groupIds = groupIds
-        self.__decodeTree = dict()
-        self.__idCnt = idCnt;
-
-    def updateDecodeTree(self, decodeTree = dict(), instIds = [], depth = 0):
-        if depth >= self.__idCnt:
-            logger.debug("found in decode tree")
-            return dict()
-
-        keys = decodeTree.keys()
-        newKey = instIds[depth].get(InstFormat.IDVALUE)
-
-        if newKey in keys:
-            newValue = self.updateDecodeTree(decodeTree.get(newKey), instIds, depth + 1)
-            decodeTree.update({newKey:newValue})
-        else:
-            logger.debug("Not found in decode tree")
-            newKey = instIds[depth].get(InstFormat.IDVALUE)
-            newValue = dict()
-            decodeTree.update({newKey:newValue})
-
-            newValue = self.updateDecodeTree(decodeTree.get(newKey), instIds, depth + 1)
-            decodeTree.update({newKey:newValue})
-
-        return decodeTree
-
-    def addInst(self, inst):
-        self.__instList.append(inst)
-
-        if len(inst.getInstIds()) != self.__idCnt:
-            logger.error("Bad instruction")
-            return
-
-        decodeTree = self.__decodeTree;
-        self.__decodeTree = self.updateDecodeTree(decodeTree, inst.getInstIds(), 0)
-
-        keys = self.__decodeTree.keys()
-
-        for instId in inst.getInstIds():
-            instId.get(InstFormat.IDVALUE)
-
-
-    def getGroupIds(self):
-        return self.__groupIds
+        self.__groupHexFormat = 0
+        self.groupFormatDetail = []
 
 class InstGenerator:
     """
@@ -213,64 +194,6 @@ class InstGenerator:
     def __init__(self, insts):
         self.__insts = insts
         self.__groups = []
-
-        self.autoFormatGroup()
-
-    def checkInstInFormatGroup(self, inst, group):
-        instIds = inst.getInstIds();
-        groupIds = group.getGroupIds();
-
-        instIdSize = len(instIds)
-        if instIdSize != len(groupIds):
-            return False
-
-        for i in range(0, instIdSize):
-
-            if not instIds[i].get(InstFormat.IDPOS) \
-                    == groupIds[i].get(InstGroup.IDPOS):
-                return False
-
-            if not instIds[i].get(InstFormat.IDWIDTH) \
-                    == groupIds[i].get(InstGroup.IDWIDTH):
-                return False
-
-        return True
-
-    def autoFormatGroup(self):
-        for inst in self.__insts:
-            inGroup = False
-            for group in self.__groups:
-                inGroup = self.checkInstInFormatGroup(inst, group)
-                if inGroup:
-                    group.addInst(inst)
-                    break
-
-            logger.debug("InstName is " + inst.getInstName())
-
-            if not inGroup:
-                group = self.addNewGroup(inst)
-                group.addInst(inst)
-                logger.debug("Add new group")
-            else:
-                logger.debug("Found in group")
-
-    def addNewGroup(self, inst):
-        gIds = []
-        for instId in inst.getInstIds():
-            gId = dict()
-            gId.update({InstGroup.IDPOS:instId.get(InstFormat.IDPOS)})
-            gId.update({InstGroup.IDWIDTH:instId.get(InstFormat.IDWIDTH)})
-            gIds.append(gId)
-        newGroup = InstGroup(gIds, len(gIds))
-        self.__groups.append(newGroup)
-        return newGroup
-
-    def analysisGroup(self):
-        groups = self.getGroups()
-
-    def getGroups(self):
-        return self.__groups
-
 
 def setLogLevel(level = 0):
     logger.setLevel(level)
@@ -395,7 +318,7 @@ def showAllInsts(insts = []):
         logger.info(hex(inst.getMaxHex()))
         logger.info(hex(inst.getMinHex()))
         logger.info(inst.getInstCode())
-        regs = inst.getRegs()
+        regs = inst.getRegsCode()
         for j in range(0, len(regs)):
             reg = regs[j]
             regname = reg.get(InstFormat.REGNAME)
@@ -433,7 +356,6 @@ def do_main(filename):
 
     showAllInsts(insts)
     generator = InstGenerator(insts)
-    generator.analysisGroup()
 
 
 if __name__ == '__main__':
